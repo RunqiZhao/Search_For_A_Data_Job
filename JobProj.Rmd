@@ -1,0 +1,433 @@
+---
+title: "JobProject"
+author: "Ricky"
+date: "12/12/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,out.width="0.9\\linewidth",dev="png",fig.align  = 'center')
+warning = F
+message = F
+pacman::p_load(
+dplyr,
+tidytext,
+ggplot2,
+forcats,
+tidyr,
+stringr,
+wordcloud2,
+usmap,
+ggmap,
+leaflet,
+gridExtra,
+igraph,
+ggraph
+)
+```
+
+# Read Data
+```{r}
+listings_ST <- readRDS("listings_ST2.rds")
+listings_DS <- readRDS("listings_DS2.rds")
+register_google("AIzaSyC9ENZrkqlnOVQw0ndDsEe90KVaat5CxTs")
+```
+
+# Stop Words
+```{r}
+data(stop_words)
+mystopwords <- tibble(word = c("data","required","position","including","skills","ability","u.s","NA",stop_words$word))
+```
+
+# Description: Count words
+## Statistician
+```{r}
+text_description_ST <- tibble(text = listings_ST$description)
+# text_description_ST
+
+count_ST <- text_description_ST  %>%
+  unnest_tokens(word, text) %>%
+  anti_join(mystopwords) %>%
+  count(word, sort = TRUE) %>%
+  slice_max(n, n = 20) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(n, word)) +
+  geom_col(fill="steelblue",alpha = 0.5) +
+  xlim(0, 2500) +
+  scale_x_reverse() +
+  scale_y_discrete(position = "right") +
+  labs(y = NULL)
+
+count_ST
+
+cloud_ST <- text_description_ST  %>%
+  unnest_tokens(word, text) %>%
+  anti_join(mystopwords) %>%
+  count(word, sort = TRUE) %>%
+  filter(n > 50) %>%
+  wordcloud2(size = 2, minRotation = -pi/6, maxRotation = -pi/6,  rotateRatio = 1)
+
+# cloud_ST
+```
+
+## Data Scientist
+```{r}
+text_description_DS <- tibble(text = listings_DS$description)
+# text_description_DS
+
+count_DS <- text_description_DS  %>%
+  unnest_tokens(word, text) %>%
+  anti_join(mystopwords) %>%
+  count(word, sort = TRUE) %>%
+  slice_max(n, n = 20) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(n, word)) +
+  geom_col(fill="darkgreen",alpha = 0.5) +
+  xlim(0, 2500) +
+  labs(y = NULL)
+
+count_DS
+
+cloud_DS <- text_description_DS  %>%
+  unnest_tokens(word, text) %>%
+  anti_join(mystopwords) %>%
+  count(word, sort = TRUE) %>%
+  filter(n > 50) %>%
+  wordcloud2(size = 2, minRotation = -pi/6, maxRotation = -pi/6,  rotateRatio = 1)
+
+# cloud_DS
+```
+
+# Description: 2-grams
+## Statistician
+```{r}
+bigrams_filtered <- listings_ST  %>% 
+  filter(!is.na(description)) %>%
+  unnest_tokens(bigram, description, token = "ngrams", n = 2) %>%
+  separate(bigram, c("word1", "word2"), sep = " ") %>%
+  filter(!word1 %in% stop_words$word) %>%
+  filter(!word2 %in% stop_words$word) %>%
+  filter(!word1 %in% mystopwords$word) %>%
+  filter(!word2 %in% mystopwords$word) 
+  
+
+bigram_counts <- bigrams_filtered %>%
+  count(word1, word2, sort = TRUE)
+
+bigrams_united <- bigrams_filtered %>%
+  unite(bigram, word1, word2, sep = " ")
+
+bigrams_united %>% count(bigram, sort = TRUE) %>%
+  filter(n > 100) %>%
+  mutate(bigram = reorder(bigram, n)) %>%
+  ggplot(aes(n, bigram)) +
+  geom_col() +
+  labs(y = NULL)
+
+# igraph
+bigram_graph <- bigram_counts %>%
+  filter(n > 20) %>%
+  graph_from_data_frame()
+
+set.seed(2020)
+ggraph(bigram_graph, layout = "fr") +
+  geom_edge_link() +
+  geom_node_point() +
+  geom_node_text(aes(label = name), vjust = 1, hjust = 1)
+
+a <- grid::arrow(type = "closed", length = unit(.15, "inches"))
+
+ggraph(bigram_graph, layout = "fr") +
+  geom_edge_link(aes(edge_alpha = n), show.legend = FALSE,
+                 arrow = a, end_cap = circle(.07, 'inches')) +
+  geom_node_point(color = "lightblue", size = 5) +
+  geom_node_text(aes(label = name), vjust = 1, hjust = 1) +
+  theme_void()
+
+
+```
+
+## Data Scientist
+```{r}
+bigrams_filtered <- listings_DS  %>% 
+  filter(!is.na(description)) %>%
+  unnest_tokens(bigram, description, token = "ngrams", n = 2) %>%
+  separate(bigram, c("word1", "word2"), sep = " ") %>%
+  filter(!word1 %in% stop_words$word) %>%
+  filter(!word2 %in% stop_words$word) %>%
+  filter(!word1 %in% mystopwords$word) %>%
+  filter(!word2 %in% mystopwords$word) 
+  
+bigram_counts <- bigrams_filtered %>% 
+  count(word1, word2, sort = TRUE)
+
+bigrams_united <- bigrams_filtered %>%
+  unite(bigram, word1, word2, sep = " ")
+
+bigrams_united %>% count(bigram, sort = TRUE) %>%
+  filter(n > 100) %>%
+  mutate(bigram = reorder(bigram, n)) %>%
+  ggplot(aes(n, bigram)) +
+  geom_col() +
+  labs(y = NULL)
+
+# igraph
+bigram_graph <- bigram_counts %>%
+  filter(n > 20) %>%
+  graph_from_data_frame()
+
+set.seed(2020)
+ggraph(bigram_graph, layout = "fr") +
+  geom_edge_link() +
+  geom_node_point() +
+  geom_node_text(aes(label = name), vjust = 1, hjust = 1)
+
+a <- grid::arrow(type = "closed", length = unit(.15, "inches"))
+
+ggraph(bigram_graph, layout = "fr") +
+  geom_edge_link(aes(edge_alpha = n), show.legend = FALSE,
+                 arrow = a, end_cap = circle(.07, 'inches')) +
+  geom_node_point(color = "lightblue", size = 5) +
+  geom_node_text(aes(label = name), vjust = 1, hjust = 1) +
+  theme_void()
+
+```
+
+# Question 2: Experience: How many years of experience are expected by company?
+## Statistician
+```{r}
+Exp_year_ST <- str_extract_all(text_description_ST$text, "[0-9].+?year") %>% unlist()
+Exp_year_ST <- 
+  Exp_year_ST[which(nchar(Exp_year_ST) <= 10)] %>%
+  str_extract_all("[[:digit:]]{1,2}") %>%
+  unlist() %>%
+  as.integer()
+Exp_year_ST <- Exp_year_ST[which(Exp_year_ST <= 10)]
+p_Exp_ST <- ggplot() +
+  geom_histogram(data = NULL, aes(x = Exp_year_ST), binwidth =1,fill="steelblue",alpha = 0.5) +
+  scale_x_continuous(breaks = 0:10)
+
+# p_Exp_ST
+
+```
+
+## Data Scientist
+```{r}
+Exp_year_DS <- str_extract_all(text_description_DS$text, "[0-9].+?year") %>% unlist()
+Exp_year_DS <- 
+  Exp_year_DS[which(nchar(Exp_year_DS) <= 10)] %>%
+  str_extract_all("[[:digit:]]{1,2}") %>%
+  unlist() %>%
+  as.integer()
+Exp_year_DS <- Exp_year_DS[which(Exp_year_DS <= 10)]
+p_Exp_DS <- ggplot() +
+  geom_histogram(data = NULL, aes(x = Exp_year_DS), binwidth =1,fill="darkgreen",alpha = 0.5) +
+  scale_x_continuous(breaks = 0:10)
+
+# p_Exp_DS
+
+```
+
+# Question 3: Location: Where to find a Data Job?
+## Statistician
+```{r}
+Loc_ST <- listings_ST %>% separate(location,c("city","state"), sep = ", ") 
+Loc_ST_State <- na.omit(Loc_ST$state)
+Loc_ST_State <- tibble(state = Loc_ST_State)
+p_Loc_ST <- Loc_ST_State %>% count(state, sort = TRUE) %>% filter(n > 3) %>% ggplot() +
+  geom_col(aes(x = reorder(state,-n), y = n), fill="steelblue",alpha = 0.5) +
+  theme_bw() + 
+  xlab("State") +   ylab("Count") + 
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 0.5), legend.position='none')
+
+# p_Loc_ST
+```
+
+```{r}
+# Statistician in MA
+Loc_ST_City <- filter(Loc_ST,state == "MA")
+Loc_ST_City <- na.omit(Loc_ST_City$city)
+Loc_ST_City <- tibble(city = Loc_ST_City)
+p_Loc_ST2_MA <- Loc_ST_City %>% count(city, sort = TRUE) %>% filter(n>1) %>% ggplot() +
+  geom_col(aes(x = reorder(city,-n), y = n), fill="steelblue",alpha = 0.5) +
+  theme_bw() + 
+  xlab("MA_City") +   ylab("Count") + 
+  theme(axis.text.x = element_text(angle = 20, hjust = 0.5, vjust = 0.5), legend.position='none')
+
+# p_Loc_ST2_MA
+
+# Statistician in CA
+Loc_ST_City <- filter(Loc_ST,state == "CA")
+Loc_ST_City <- na.omit(Loc_ST_City$city)
+Loc_ST_City <- tibble(city = Loc_ST_City)
+p_Loc_ST2_MA <- Loc_ST_City %>% count(city, sort = TRUE) %>% filter(n>1) %>% ggplot() +
+  geom_col(aes(x = reorder(city,-n), y = n), fill="steelblue",alpha = 0.5) +
+  theme_bw() + 
+  xlab("CA_City") +   ylab("Count") + 
+  theme(axis.text.x = element_text(angle = 20, hjust = 0.5, vjust = 0.5), legend.position='none')
+
+# p_Loc_ST2_CA
+
+```
+
+## Data Scientist
+```{r}
+Loc_DS <- listings_DS %>% separate(location,c("city","state"), sep = ", ") 
+Loc_DS_State <- na.omit(Loc_DS$state)
+Loc_DS_State <- tibble(state = Loc_DS_State)
+p_Loc_DS <- Loc_DS_State %>% count(state, sort = TRUE) %>% filter(n > 3) %>% ggplot() +
+  geom_col(aes(x = reorder(state,-n), y = n), fill="darkgreen",alpha = 0.5) +
+  theme_bw() + 
+  xlab("State") +   ylab("Count") + 
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 0.5), legend.position='none')
+
+# p_Loc_DS
+```
+
+```{r}
+# Data Scientist in MA
+Loc_DS_City <- filter(Loc_DS,state == "MA")
+Loc_DS_City <- na.omit(Loc_DS_City$city)
+Loc_DS_City <- tibble(city = Loc_DS_City)
+p_Loc_DS2_MA <- Loc_DS_City %>% count(city, sort = TRUE) %>%  filter(n > 1) %>% ggplot() +
+  geom_col(aes(x = reorder(city,-n), y = n), fill="darkgreen",alpha = 0.5) +
+  theme_bw() + 
+  xlab("MA_City") +   ylab("Count") + 
+  theme(axis.text.x = element_text(angle = 20, hjust = 0.5, vjust = 0.5), legend.position='none')
+
+# p_Loc_DS2_MA
+
+# Data Scientist in CA
+Loc_DS_City <- filter(Loc_DS,state == "CA")
+Loc_DS_City <- na.omit(Loc_DS_City$city)
+Loc_DS_City <- tibble(city = Loc_DS_City)
+p_Loc_DS2_CA <- Loc_DS_City %>% count(city, sort = TRUE) %>%  filter(n > 1) %>% ggplot() +
+  geom_col(aes(x = reorder(city,-n), y = n), fill="darkgreen",alpha = 0.5) +
+  theme_bw() + 
+  xlab("CA_City") +   ylab("Count") + 
+  theme(axis.text.x = element_text(angle = 20, hjust = 0.5, vjust = 0.5), legend.position='none')
+
+# p_Loc_DS2_CA
+```
+
+
+# Question 4: Word Count/Clound under Location MA/CA
+## Statistician
+```{r}
+ST_MA_CA <- filter(Loc_ST,state %in% c("MA","CA"))
+
+ST_MA_CA <- tibble(ST_MA_CA)
+
+count_ST_Loc <- ST_MA_CA  %>%
+  unnest_tokens(word, description, token = "words") %>%
+  anti_join(mystopwords) %>%
+  group_by(state) %>%
+  count(word, sort = TRUE) %>%
+  slice_max(n, n = 20) %>%
+  ungroup()
+
+p_ST_Loc_CA <- filter(count_ST_Loc,state == "CA") %>%
+  ggplot(aes(x = n, y = reorder(word,n))) +
+  geom_col(fill = "orange", alpha = 0.5,show.legend = FALSE) +
+  labs(x = "CA", y = NULL)
+
+p_ST_Loc_MA <- filter(count_ST_Loc,state == "MA") %>%
+  ggplot(aes(x = n, y = reorder(word,n))) +
+  geom_col(fill = "red", alpha = 0.5, show.legend = FALSE) +
+  labs(x = "MA", y = NULL)
+
+# grid.arrange(p_ST_Loc_CA, p_ST_Loc_MA, ncol=2)
+
+```
+
+## Data Scientist
+```{r}
+DS_MA_CA <- filter(Loc_DS,state %in% c("MA","CA"))
+
+DS_MA_CA <- tibble(DS_MA_CA)
+
+count_DS_Loc <- DS_MA_CA  %>%
+  unnest_tokens(word, description, token = "words") %>%
+  anti_join(mystopwords) %>%
+  group_by(state) %>%
+  count(word, sort = TRUE) %>%
+  slice_max(n, n = 20) %>%
+  ungroup()
+
+p_DS_Loc_CA <- filter(count_DS_Loc,state == "CA") %>%
+  ggplot(aes(x = n, y = reorder(word,n))) +
+  geom_col(fill = "orange", alpha = 0.5,show.legend = FALSE) +
+  labs(x = "CA", y = NULL)
+
+p_DS_Loc_MA <- filter(count_DS_Loc,state == "MA") %>%
+  ggplot(aes(x = n, y = reorder(word,n))) +
+  geom_col(fill = "red", alpha = 0.5, show.legend = FALSE) +
+  labs(x = "MA", y = NULL)
+
+# grid.arrange(p_DS_Loc_CA, p_DS_Loc_MA, ncol=2)
+```
+
+# Question 5: Company: Who is providing Data Job?
+## Statistician
+```{r}
+count_ST_Comp <- tibble(text = listings_ST$company)  %>%
+  count(text, sort = TRUE) %>%
+  filter(n > 5) %>%
+  mutate(text = reorder(text, n)) %>%
+  ggplot(aes(n, text)) +
+  geom_col() +
+  labs(y = NULL)
+
+# count_ST_Comp
+
+```
+
+## Data Scientist
+```{r}
+count_DS_Comp <- tibble(text = listings_DS$company)  %>%
+  count(text, sort = TRUE) %>%
+  filter(n > 2) %>%
+  mutate(text = reorder(text, n)) %>%
+  ggplot(aes(n, text)) +
+  geom_col() +
+  labs(y = NULL)
+
+# count_DS_Comp
+```
+
+# Mapping
+## Statistician
+```{r}
+Link <- paste0('<a href = ',listings_ST$link,'> Details from Indeed </a>')
+i_popup <- paste0("<strong>Titel: </strong>", listings_ST$title, "<br>", 
+                  "<strong>Company: </strong>", listings_ST$company, "<br>", 
+                  "<strong>Location: </strong>", listings_ST$address, "<br>",
+                  "<strong>Job Link: </strong>", Link)
+
+LL <- listings_ST[8:9]
+Mapping_ST <- LL %>%
+  leaflet() %>%
+  addTiles() %>%
+  setView(-71.0588, 42.36, zoom = 10) %>%
+  addMarkers(clusterOptions = markerClusterOptions(),popup=i_popup)
+```
+
+## Data Scientist
+```{R}
+Link <- paste0('<a href = ',listings_DS$link,'> Details from Indeed </a>')
+i_popup <- paste0("<strong>Titel: </strong>", listings_DS$title, "<br>", 
+                  "<strong>Company: </strong>", listings_DS$company, "<br>", 
+                  "<strong>Location: </strong>", listings_DS$address, "<br>",
+                  "<strong>Job Link: </strong>", Link)
+
+LL <- listings_DS[8:9]
+Mapping_DS <- LL %>%
+  leaflet() %>%
+  addTiles() %>%
+  setView(-71.0588, 42.36, zoom = 10) %>%
+  addMarkers(clusterOptions = markerClusterOptions(),popup=i_popup)
+
+```
+
+
+
