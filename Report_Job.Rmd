@@ -1,0 +1,589 @@
+---
+title: "Search For A Data Job"
+author: "Ricky Zhao"
+date: "12/14/2020"
+output:
+  html_document: 
+    toc: yes
+    toc_float: yes
+    theme: cerulean
+  pdf_document:
+    toc: yes
+---
+
+<style type="text/css">
+
+body{ /* text  */
+      font-size: 18px;
+  }
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+warning = F
+message = F
+pacman::p_load(
+dplyr,
+tidytext,
+ggplot2,
+forcats,
+tidyr,
+stringr,
+wordcloud,
+leaflet,
+gridExtra,
+kableExtra,
+igraph,
+ggraph
+)
+```
+
+```{r include=FALSE}
+# Read Data
+listings_ST <- readRDS("listings_ST2.rds")
+listings_DS <- readRDS("listings_DS2.rds")
+# register_google("AIzaSyC9ENZrkqlnOVQw0ndDsEe90KVaat5CxTs")
+
+```
+
+# Search for a Data Job
+
+Nowadays, we have two different types of title for Data Job, one is Statistician, one is Data Scientist. What are the difference between these two kind of title?  
+
+Here are some questions to be answered in this project:  
+1. Descriptions: Is there any difference in the Job Descriptions?  
+2. Experience: How many years of experience are expected by companies?  
+3. Location: Where to find a Data Job?  
+4. Location: Word Count/Cloud between different location (MA/CA)  
+5. Company: Who is providing Data Job?  
+6. Mapping the Jobs  
+
+# Extract data from Indeed
+
+In the website of Indeed: <https://www.indeed.com/>, we can search for Job information with keywords.  
+Extract data with keywords  **Statistician** and **Data Scientist**, get information of Job Title, Company, Location, Job Link, Job Description.  
+Take Statistician as example:  
+
+```{r echo=FALSE}
+kable(head(listings_ST[,c(1:3,5:6)],10),col.names = c("Title","Company","Location","Link","Description"),"html",align = "c") %>%
+  kable_styling(font_size = 11) %>%
+    scroll_box(width = "105%", height = "400px")
+```
+
+# 1. Difference in Job Descriptions.
+
+## Word Count
+
+```{r include=FALSE}
+# Stop Words
+data(stop_words)
+mystopwords <- tibble(word = c("data","required","position","including","skills","ability","u.s","NA",stop_words$word))
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width = 11, fig.height=4.5, fig.align='center'}
+# text_description_ST
+text_description_ST <- tibble(text = listings_ST$description)
+count_ST <- text_description_ST  %>%
+  unnest_tokens(word, text) %>%
+  anti_join(mystopwords) %>%
+  count(word, sort = TRUE) %>%
+  slice_max(n, n = 20) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(n, word)) +
+  geom_col(fill="steelblue",alpha = 0.5) +
+  xlim(0, 2500) +
+  scale_x_reverse() +
+  scale_y_discrete(position = "right") +
+  ggtitle("Statistician") +
+  theme(axis.text=element_text(size=12), plot.title = element_text(size = 22, face = "bold")) +
+  labs(x = NULL) +
+  labs(y = NULL)
+
+# text_description_DS
+text_description_DS <- tibble(text = listings_DS$description)
+count_DS <- text_description_DS  %>%
+  unnest_tokens(word, text) %>%
+  anti_join(mystopwords) %>%
+  count(word, sort = TRUE) %>%
+  slice_max(n, n = 20) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(n, word)) +
+  geom_col(fill="darkgreen",alpha = 0.5) +
+  xlim(0, 2500) +
+  ggtitle("Data Scientist") +
+  theme(axis.text=element_text(size=12), plot.title = element_text(size = 22, face = "bold")) +
+  labs(x = NULL) +
+  labs(y = NULL)
+
+grid.arrange(count_ST,count_DS, nrow = 1, ncol = 2)
+
+```
+
+From the plots, we can find that both of them have a high frequency words like experience, analysis and statistical. But also have some special words. For example:  
+**Statistician:** Research, management, clinical, design...  
+**Data Scientist:** Learning, machine, tools, modeling, techniques...
+
+----
+
+## Word Cloud 
+
+The left one is the cloud of  Statistician, the right one is the cloud of Data Scientist.  
+```{r echo=FALSE,message=FALSE, warning=FALSE, fig.width = 12, fig.height=6, fig.align='center'}
+
+par(mfrow=c(1,2))
+
+cloud_ST <- text_description_ST  %>%
+  unnest_tokens(word, text) %>%
+  anti_join(mystopwords) %>%
+  count(word, sort = TRUE) %>%
+  filter(n > 100)
+
+set.seed(2020)
+  p1 <- wordcloud(words = cloud_ST$word, freq = cloud_ST$n, min.freq = 1, max.words = 150, colors = brewer.pal(8, 'Paired'), random.order = FALSE,rot.per=0.35)
+  
+
+cloud_DS <- text_description_DS  %>%
+   unnest_tokens(word, text) %>%
+   anti_join(mystopwords) %>%
+   count(word, sort = TRUE) %>%
+   filter(n > 100) 
+
+set.seed(2020)
+  p2 <- wordcloud(words = cloud_DS$word, freq = cloud_DS$n, min.freq = 1, max.words = 150, colors = brewer.pal(8, 'Dark2'), random.order = FALSE,rot.per=0.35,scale=c(2.5,0.75))
+
+```
+
+----
+
+## 2-grams words 
+
+```{r echo=FALSE, fig.width = 10, fig.height=4.5, fig.align='center'}
+bigrams_filtered_ST <- listings_ST  %>% 
+  filter(!is.na(description)) %>%
+  unnest_tokens(bigram, description, token = "ngrams", n = 2) %>%
+  separate(bigram, c("word1", "word2"), sep = " ") %>%
+  filter(!word1 %in% stop_words$word) %>%
+  filter(!word2 %in% stop_words$word) %>%
+  filter(!word1 %in% mystopwords$word) %>%
+  filter(!word2 %in% mystopwords$word) 
+
+bigram_counts_ST <- bigrams_filtered_ST %>%
+  count(word1, word2, sort = TRUE)
+
+bigrams_united_ST <- bigrams_filtered_ST %>%
+  unite(bigram, word1, word2, sep = " ")
+
+p_2g_ST <- bigrams_united_ST %>% count(bigram, sort = TRUE) %>%
+  slice_max(n, n = 20) %>%
+  mutate(bigram = reorder(bigram, n)) %>%
+  ggplot(aes(n, bigram)) +
+  geom_col(fill="steelblue",alpha = 0.5) +
+  scale_x_reverse() +
+  scale_y_discrete(position = "right") +
+  ggtitle("Statistician") +
+  theme(axis.text=element_text(size=12), plot.title = element_text(size = 22, face = "bold")) +
+  labs(x = NULL) +
+  labs(y = NULL)
+
+# p_2g_ST
+
+bigrams_filtered_DS <- listings_DS  %>% 
+  filter(!is.na(description)) %>%
+  unnest_tokens(bigram, description, token = "ngrams", n = 2) %>%
+  separate(bigram, c("word1", "word2"), sep = " ") %>%
+  filter(!word1 %in% stop_words$word) %>%
+  filter(!word2 %in% stop_words$word) %>%
+  filter(!word1 %in% mystopwords$word) %>%
+  filter(!word2 %in% mystopwords$word) 
+
+bigram_counts_DS <- bigrams_filtered_DS %>%
+  count(word1, word2, sort = TRUE)
+
+bigrams_united_DS <- bigrams_filtered_DS %>%
+  unite(bigram, word1, word2, sep = " ")
+
+p_2g_DS <- bigrams_united_DS %>% count(bigram, sort = TRUE) %>%
+  slice_max(n, n = 20) %>%
+  mutate(bigram = reorder(bigram, n)) %>%
+  ggplot(aes(n, bigram)) +
+  geom_col(fill="darkgreen",alpha = 0.5) +
+  ggtitle("Data Scientist") +
+  theme(axis.text=element_text(size=12), plot.title = element_text(size = 22, face = "bold")) +
+  labs(x = NULL) +
+  labs(y = NULL)
+
+# p_2g_DS
+
+grid.arrange(p_2g_ST,p_2g_DS, nrow = 1, ncol = 2)
+```
+
+From the 2-grams plots, we can find some special topic in the descriptions. Most of the companies will mention "Opportunity", "Race", "Sexual" problems.  
+Also, we can tell that **Clinical** will give more "Statistician" title, and may focus on qualified applicants.And "Statistician" will work on methods, research, development...  
+But for "Data Scientist", they are expected to gain "Computer science", and work on deep learning, modeling...
+
+----
+
+## Network plots  
+
+Also give network plots of these two titles. The left one is for Statistician, and right one is for Data Scientist.
+
+```{r echo=FALSE,message=FALSE, warning=FALSE, fig.width = 16, fig.height=8, fig.align='center'}
+
+# igraph_ST
+bigram_graph_ST <- bigram_counts_ST %>%
+  filter(n > 20) %>%
+  graph_from_data_frame()
+
+set.seed(2020)
+a <- grid::arrow(type = "closed", length = unit(.15, "inches"))
+bigram_graph_ST <- ggraph(bigram_graph_ST, layout = "fr") +
+  geom_edge_link(aes(edge_alpha = n), show.legend = FALSE,
+                 arrow = a, end_cap = circle(.07, 'inches')) +
+  geom_node_point(color = "steelblue",alpha = 0.5, size = 3) +
+  geom_node_text(aes(label = name), vjust = 1, hjust = 1) +
+  theme_void()
+
+# bigram_graph_ST
+
+# igraph_DS
+bigram_graph_DS <- bigram_counts_DS %>%
+  filter(n > 20) %>%
+  graph_from_data_frame()
+
+set.seed(2020)
+bigram_graph_DS <- ggraph(bigram_graph_DS, layout = "fr") +
+  geom_edge_link(aes(edge_alpha = n), show.legend = FALSE,
+                 arrow = a, end_cap = circle(.07, 'inches')) +
+  geom_node_point(color = "steelblue",alpha = 0.5, size = 3) +
+  geom_node_text(aes(label = name), vjust = 1, hjust = 1) +
+  theme_void()
+
+# bigram_graph_DS
+grid.arrange(arrangeGrob(bigram_graph_ST,bigram_graph_DS, nrow = 1, ncol = 2), heights = 7, widths = 9 )
+```
+
+----
+
+# Question 2: Experience requirement
+
+As we can see, the word "Experience" is the most frequently mentioned one in the description. How many years of experience are expected by the companies?
+
+```{r echo=FALSE,message=FALSE, warning=FALSE, fig.width = 11, fig.height=4.5, fig.align='center'}
+Exp_year_ST <- str_extract_all(text_description_ST$text, "[0-9].+?year") %>% unlist()
+Exp_year_ST <- 
+  Exp_year_ST[which(nchar(Exp_year_ST) <= 10)] %>%
+  str_extract_all("[[:digit:]]{1,2}") %>%
+  unlist() %>%
+  as.integer()
+Exp_year_ST <- Exp_year_ST[which(Exp_year_ST <= 10)]
+
+p_Exp_ST <- ggplot() +
+  geom_histogram(data = NULL, aes(x = Exp_year_ST), binwidth =1,fill="steelblue",alpha = 0.5) + 
+  geom_vline(aes(xintercept=mean(Exp_year_ST)),linetype=5,col="red") +
+  xlab("Expect years for Statistician") +
+  ylab("Count of Job Information") +
+  scale_x_continuous(breaks = 0:10)
+
+# p_Exp_ST
+
+Exp_year_DS <- str_extract_all(text_description_DS$text, "[0-9].+?year") %>% unlist()
+Exp_year_DS <- 
+  Exp_year_DS[which(nchar(Exp_year_DS) <= 10)] %>%
+  str_extract_all("[[:digit:]]{1,2}") %>%
+  unlist() %>%
+  as.integer()
+Exp_year_DS <- Exp_year_DS[which(Exp_year_DS <= 10)]
+
+p_Exp_DS <- ggplot() +
+  geom_histogram(data = NULL, aes(x = Exp_year_DS), binwidth =1,fill="darkgreen",alpha = 0.5) +
+  geom_vline(aes(xintercept=mean(Exp_year_DS)),linetype=5,col="red") +
+  xlab("Expect years for Data Scientist") +
+  ylab(NULL)+
+  scale_x_continuous(breaks = 0:10)
+
+# p_Exp_DS
+
+grid.arrange(p_Exp_ST,p_Exp_DS, nrow = 1, ncol = 2)
+```
+
+From the plots, we can tell that most of the companies are expected for 1-3 years working experience, but for Statisticians, there is another high expect years, 5 years. 
+
+# Question 3: Job location
+
+## State Location
+
+Look at the location distribution, we can find that most of the companies are located at Massachusetts and California.
+
+```{r echo=FALSE,message=FALSE, warning=FALSE, fig.width = 11, fig.height=5, fig.align='center'}
+Loc_ST <- listings_ST %>% separate(location,c("city","state"), sep = ", ") 
+Loc_ST_State <- na.omit(Loc_ST$state)
+Loc_ST_State <- tibble(state = Loc_ST_State)
+p_Loc_ST <- Loc_ST_State %>% count(state, sort = TRUE) %>% filter(n > 3) %>% ggplot() +
+  geom_col(aes(x = reorder(state,-n), y = n), fill="steelblue",alpha = 0.5) +
+  theme_bw() + 
+  xlab("Statistician") +   ylab("Count of Job Information") + 
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 0.5), legend.position='none')
+
+# p_Loc_ST
+
+Loc_DS <- listings_DS %>% separate(location,c("city","state"), sep = ", ") 
+Loc_DS_State <- na.omit(Loc_DS$state)
+Loc_DS_State <- tibble(state = Loc_DS_State)
+p_Loc_DS <- Loc_DS_State %>% count(state, sort = TRUE) %>% filter(n > 3) %>% ggplot() +
+  geom_col(aes(x = reorder(state,-n), y = n), fill="darkgreen",alpha = 0.5) +
+  theme_bw() + 
+  xlab("Data Scientist") +   ylab(NULL) + 
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 0.5), legend.position='none')
+
+# p_Loc_DS
+
+grid.arrange(p_Loc_ST,p_Loc_DS, nrow = 1, ncol = 2)
+
+```
+
+----
+
+## Look at the city distribution of MA and CA
+
+For statisticians, working opportunities concentrated at Massachusetts, especially Boston. 
+
+```{r echo=FALSE,message=FALSE, warning=FALSE, fig.width = 11, fig.height=6, fig.align='center'}
+# Statistician in MA
+Loc_ST_City <- filter(Loc_ST,state == "MA")
+Loc_ST_City <- na.omit(Loc_ST_City$city)
+Loc_ST_City <- tibble(city = Loc_ST_City)
+p_Loc_ST2_MA <- Loc_ST_City %>% count(city, sort = TRUE) %>% filter(n>1) %>% ggplot() +
+  geom_col(aes(x = reorder(city,-n), y = n), fill="steelblue",alpha = 0.5) +
+  theme_bw() + 
+  xlab("MA_City") +   ylab("Count") + 
+  theme(axis.text.x = element_text(angle = 20, hjust = 0.5, vjust = 0.5), legend.position='none')
+
+# p_Loc_ST2_MA
+
+# Statistician in CA
+Loc_ST_City <- filter(Loc_ST,state == "CA")
+Loc_ST_City <- na.omit(Loc_ST_City$city)
+Loc_ST_City <- tibble(city = Loc_ST_City)
+p_Loc_ST2_CA <- Loc_ST_City %>% count(city, sort = TRUE) %>% filter(n>1) %>% ggplot() +
+  geom_col(aes(x = reorder(city,-n), y = n), fill="steelblue",alpha = 0.5) +
+  theme_bw() + 
+  xlab("CA_City") +   ylab(NULL) + 
+  theme(axis.text.x = element_text(angle = 20, hjust = 0.5, vjust = 0.5), legend.position='none')
+
+# p_Loc_ST2_CA
+
+grid.arrange(p_Loc_ST2_MA,p_Loc_ST2_CA, nrow = 1, ncol = 2)
+
+```
+
+----
+
+When it turns to Data Scientists, more working opportunities can be find in California, especially San Francisco. 
+
+```{r echo=FALSE,message=FALSE, warning=FALSE, fig.width = 11,  fig.height=6, fig.align='center'}
+# Data Scientist in MA
+Loc_DS_City <- filter(Loc_DS,state == "MA")
+Loc_DS_City <- na.omit(Loc_DS_City$city)
+Loc_DS_City <- tibble(city = Loc_DS_City)
+p_Loc_DS2_MA <- Loc_DS_City %>% count(city, sort = TRUE) %>%  filter(n > 1) %>% ggplot() +
+  geom_col(aes(x = reorder(city,-n), y = n), fill="darkgreen",alpha = 0.5) +
+  theme_bw() + 
+  xlab("MA_City") +   ylab("Count") + 
+  theme(axis.text.x = element_text(angle = 20, hjust = 0.5, vjust = 0.5), legend.position='none')
+
+# p_Loc_DS2_MA
+
+# Data Scientist in CA
+Loc_DS_City <- filter(Loc_DS,state == "CA")
+Loc_DS_City <- na.omit(Loc_DS_City$city)
+Loc_DS_City <- tibble(city = Loc_DS_City)
+p_Loc_DS2_CA <- Loc_DS_City %>% count(city, sort = TRUE) %>%  filter(n > 1) %>% ggplot() +
+  geom_col(aes(x = reorder(city,-n), y = n), fill="darkgreen",alpha = 0.5) +
+  theme_bw() + 
+  xlab("CA_City") +   ylab(NULL) + 
+  theme(axis.text.x = element_text(angle = 20, hjust = 0.5, vjust = 0.5), legend.position='none')
+
+# p_Loc_DS2_CA
+
+grid.arrange(p_Loc_DS2_MA,p_Loc_DS2_CA, nrow = 1, ncol = 2)
+```
+
+
+# Question 4: Difference by Location
+
+## Statistician
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width = 11,  fig.height=5, fig.align='center'}
+ST_MA_CA <- filter(Loc_ST,state %in% c("MA","CA"))
+
+ST_MA_CA <- tibble(ST_MA_CA)
+
+count_ST_Loc <- ST_MA_CA  %>%
+  unnest_tokens(word, description, token = "words") %>%
+  anti_join(mystopwords) %>%
+  group_by(state) %>%
+  count(word, sort = TRUE) %>%
+  slice_max(n, n = 20) %>%
+  ungroup()
+
+p_ST_Loc_CA <- filter(count_ST_Loc,state == "CA") %>%
+  ggplot(aes(x = n, y = reorder(word,n))) +
+  geom_col(fill = "orange", alpha = 0.5,show.legend = FALSE) +
+  scale_x_reverse() +
+  scale_y_discrete(position = "right") +
+  ggtitle("CA") +
+  theme(axis.text=element_text(size=12), plot.title = element_text(size = 22, face = "bold")) +
+  xlab(NULL) + ylab(NULL)
+
+p_ST_Loc_MA <- filter(count_ST_Loc,state == "MA") %>%
+  ggplot(aes(x = n, y = reorder(word,n))) +
+  geom_col(fill = "red", alpha = 0.5, show.legend = FALSE) +
+  ggtitle("MA") +
+  theme(axis.text=element_text(size=12), plot.title = element_text(size = 22, face = "bold")) +
+  xlab(NULL) + ylab(NULL)
+
+grid.arrange(p_ST_Loc_CA, p_ST_Loc_MA, ncol=2)
+
+```
+
+----
+
+## Data Scientist
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width = 11,  fig.height=5, fig.align='center'}
+DS_MA_CA <- filter(Loc_DS,state %in% c("MA","CA"))
+
+DS_MA_CA <- tibble(DS_MA_CA)
+
+count_DS_Loc <- DS_MA_CA  %>%
+  unnest_tokens(word, description, token = "words") %>%
+  anti_join(mystopwords) %>%
+  group_by(state) %>%
+  count(word, sort = TRUE) %>%
+  slice_max(n, n = 20) %>%
+  ungroup()
+
+p_DS_Loc_CA <- filter(count_DS_Loc,state == "CA") %>%
+  ggplot(aes(x = n, y = reorder(word,n))) +
+  geom_col(fill = "orange", alpha = 0.5,show.legend = FALSE) +
+  scale_x_reverse() +
+  scale_y_discrete(position = "right") +
+  ggtitle("CA") +
+  theme(axis.text=element_text(size=12), plot.title = element_text(size = 22, face = "bold")) +
+  xlab(NULL) + ylab(NULL)
+
+p_DS_Loc_MA <- filter(count_DS_Loc,state == "MA") %>%
+  ggplot(aes(x = n, y = reorder(word,n))) +
+  geom_col(fill = "red", alpha = 0.5, show.legend = FALSE) +
+  ggtitle("MA") +
+  theme(axis.text=element_text(size=12), plot.title = element_text(size = 22, face = "bold")) +
+  xlab(NULL) + ylab(NULL)
+
+grid.arrange(p_DS_Loc_CA, p_DS_Loc_MA, ncol=2)
+```
+
+Look at the two plots above, we will tell that there is not a big difference between locations.
+
+
+# Question 5: Who is providing Data Job
+
+For Statisticians, Natera provided most opportunities, and most of the following companies are health industry companies, like Bristol Myers Squibb, Takeda Pharmaceuticals.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width = 11,  fig.height=5, fig.align='center'}
+count_ST_Comp <- tibble(text = listings_ST$company)  %>%
+  count(text, sort = TRUE) %>%
+  # filter(n > 5) %>%
+  slice_max(n, n = 10) %>%
+  mutate(text = reorder(text, n)) %>%
+  ggplot(aes(n, text)) +
+  geom_col(fill="steelblue",alpha = 0.5) +
+  # scale_x_reverse() +
+  # scale_y_discrete(position = "right") +
+  ggtitle("Statistician") +
+  theme(axis.text=element_text(size=12), plot.title = element_text(size = 22, face = "bold")) +
+  xlab(NULL) +   ylab(NULL)
+
+count_ST_Comp
+```
+
+----
+
+However, except CVS, most of the Data Scientist positions come from technical companies, like Apple, Microsoft and IBM.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width = 11,  fig.height=5, fig.align='center'}
+count_DS_Comp <- tibble(text = listings_DS$company)  %>%
+  count(text, sort = TRUE) %>%
+  # filter(n > 2) %>%
+  slice_max(n, n = 10) %>%
+  mutate(text = reorder(text, n)) %>%
+  ggplot(aes(n, text)) +
+  geom_col(fill="darkgreen",alpha = 0.5) +
+  ggtitle("Data Scientist") +
+  theme(axis.text=element_text(size=12), plot.title = element_text(size = 22, face = "bold")) +
+  xlab(NULL) +   ylab(NULL)
+
+count_DS_Comp
+
+# grid.arrange(count_ST_Comp, count_DS_Comp, ncol=2)
+```
+
+# Look at the Jobs in Map
+
+## Statistician
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width = 8.5}
+Link <- paste0('<a href = ',listings_ST$link,'> Details from Indeed </a>')
+i_popup <- paste0("<strong>Titel: </strong>", listings_ST$title, "<br>", 
+                  "<strong>Company: </strong>", listings_ST$company, "<br>", 
+                  "<strong>Location: </strong>", listings_ST$address, "<br>",
+                  "<strong>Job Link: </strong>", Link)
+
+LL <- listings_ST[8:9]
+Mapping_ST <- LL %>%
+  leaflet() %>%
+  addTiles() %>%
+  setView(-78, 40, zoom = 6) %>%
+  addMarkers(clusterOptions = markerClusterOptions(),popup=i_popup)
+
+Mapping_ST
+```
+
+----
+
+## Data Scientist
+
+```{R echo=FALSE, message=FALSE, warning=FALSE, fig.width = 8.5}
+Link <- paste0('<a href = ',listings_DS$link,'> Details from Indeed </a>')
+i_popup <- paste0("<strong>Titel: </strong>", listings_DS$title, "<br>", 
+                  "<strong>Company: </strong>", listings_DS$company, "<br>", 
+                  "<strong>Location: </strong>", listings_DS$address, "<br>",
+                  "<strong>Job Link: </strong>", Link)
+
+LL <- listings_DS[8:9]
+Mapping_DS <- LL %>%
+  leaflet() %>%
+  addTiles() %>%
+  setView(-78, 40, zoom = 6) %>%
+  addMarkers(clusterOptions = markerClusterOptions(),popup=i_popup)
+
+Mapping_DS
+```
+
+Note: You can also get Job Details by click the link on the markers in the maps.
+
+# Conclusion
+
+From this project, we can tell that there is difference between Statistician and Data Scientist, including the main industries, required knowledge and skills.  
+
+For statisticians, they more going to health industry, or we can say health industry prefer to call "Data Job" as Statistician. While Tech industries will call it Data Scientist.  
+
+Also, we can find that the Job vacancy clustered around Massachusetts and California, some in New York. And for statisticians, opportunities concentrated at Massachusetts.  
+
+Another finding is that, since the most frequently mentioned required experience is around 3-4 years, we will have a good chance to move to another position (maybe higher) after working for 3-4 years.
+
+
+# Reference
+
+1. Data set: <a href="https://www.indeed.com/">Indeed</a> 
+2. Longitude and Latitude: <a href="https://cloud.google.com/maps-platform/">Google Map</a>
+3. Text Mining: <a href="https://www.tidytextmining.com/">Text Mining with R</a>
