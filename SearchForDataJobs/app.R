@@ -106,7 +106,7 @@ ui <- dashboardPage(
                                )
                         ),
                     ),
-                    wordcloud2Output("p_WordsC",height = 650, width = 1200)
+                    wordcloud2Output("p_WordsC",height = 650, width = 1100)
             ),
             
             tabItem("Location",
@@ -163,7 +163,7 @@ ui <- dashboardPage(
                                    "JobTitleM", "Job Title: ", c("All", "Statistician", "Data Scientist")                       )
                         ),
                     ),
-                    leafletOutput("LeafletPlot", height = 650, width = 1200),
+                    leafletOutput("LeafletPlot", height = 600, width = 1100),
                     fluidPage(textOutput("text1"),tags$head(tags$style("#text1{color: black; font-size: 22px}")),
                               textOutput("text2"),tags$head(tags$style("#text2{color: black; font-size: 22px}"))
                               )
@@ -298,8 +298,8 @@ server <- function(input, output) {
         cloud <- text_description  %>%
             unnest_tokens(word, text) %>%
             anti_join(mystopwords) %>%
-            count(word, sort = TRUE)
-        
+            count(word, sort = TRUE) %>%
+            filter(n>100) 
             wordcloud2(cloud, size = 2, minRotation = -pi/6, maxRotation = -pi/6,  rotateRatio = 1)  
 
     }
