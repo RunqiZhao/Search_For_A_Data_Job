@@ -1,22 +1,21 @@
 ---
-title: "Search For A Data Job"
-author: "Ricky Zhao"
-date: "12/14/2020"
+title: "Search for A Data Job - Final Project"
+author: "Ricky"
+date: "12/13/2020"
 output:
-  html_document: 
-    toc: yes
-    toc_float: yes
-    theme: cerulean
-  pdf_document:
-    toc: yes
+  revealjs::revealjs_presentation:
+    theme: serif
+    transition: default
+    css: leaflet-reveal.css
+    center: false
+    self_contained: false
+    reveal_plugins: ["menu"]
+    reveal_options:
+      menu:
+        numbers: false,
+        hideMissingTitles: true,
+      slideNumber: true
 ---
-
-<style type="text/css">
-
-body{ /* text  */
-      font-size: 18px;
-  }
-</style>
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -70,9 +69,9 @@ kable(head(listings_ST[,c(1:3,5:6)],10),col.names = c("Title","Company","Locatio
     scroll_box(width = "105%", height = "400px")
 ```
 
-# 1. Difference in Job Descriptions
+# Question 1. Difference in Job Descriptions
 
-## Word Count
+- Word Count
 
 ```{r include=FALSE}
 # Stop Words
@@ -125,7 +124,7 @@ From the plots, we can find that both of them have a high frequency words like e
 
 ----
 
-## Word Cloud 
+- Word Cloud 
 
 The left one is the cloud of  Statistician, the right one is the cloud of Data Scientist.  
 ```{r echo=FALSE,message=FALSE, warning=FALSE, fig.width = 12, fig.height=6, fig.align='center'}
@@ -155,7 +154,7 @@ set.seed(2020)
 
 ----
 
-## 2-grams words 
+- 2-grams words 
 
 ```{r echo=FALSE, fig.width = 10, fig.height=4.5, fig.align='center'}
 bigrams_filtered_ST <- listings_ST  %>% 
@@ -223,7 +222,7 @@ But for "Data Scientist", they are expected to gain "Computer science", and work
 
 ----
 
-## Network plots  
+- Network plots  
 
 Also give network plots of these two titles. The left one is for Statistician, and right one is for Data Scientist.
 
@@ -262,9 +261,8 @@ bigram_graph_DS <- ggraph(bigram_graph_DS, layout = "fr") +
 grid.arrange(arrangeGrob(bigram_graph_ST,bigram_graph_DS, nrow = 1, ncol = 2), heights = 7, widths = 9 )
 ```
 
-----
 
-# Question 2: Experience requirement
+# Question 2:  Experience requirement
 
 As we can see, the word "Experience" is the most frequently mentioned one in the description. How many years of experience are expected by the companies?
 
@@ -310,7 +308,7 @@ From the plots, we can tell that most of the companies are expected for 1-3 year
 
 # Question 3: Job location
 
-## State Location
+- State Location
 
 Look at the location distribution, we can find that most of the companies are located at Massachusetts and California.
 
@@ -343,7 +341,7 @@ grid.arrange(p_Loc_ST,p_Loc_DS, nrow = 1, ncol = 2)
 
 ----
 
-## Look at the city distribution of MA and CA
+- Look at the city distribution of MA and CA
 
 For statisticians, working opportunities concentrated at Massachusetts, especially Boston. 
 
@@ -411,7 +409,7 @@ grid.arrange(p_Loc_DS2_MA,p_Loc_DS2_CA, nrow = 1, ncol = 2)
 
 # Question 4: Difference by Location
 
-## Statistician
+- Statistician
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width = 11,  fig.height=5, fig.align='center'}
 ST_MA_CA <- filter(Loc_ST,state %in% c("MA","CA"))
@@ -448,7 +446,7 @@ grid.arrange(p_ST_Loc_CA, p_ST_Loc_MA, ncol=2)
 
 ----
 
-## Data Scientist
+- Data Scientist
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width = 11,  fig.height=5, fig.align='center'}
 DS_MA_CA <- filter(Loc_DS,state %in% c("MA","CA"))
@@ -485,7 +483,7 @@ grid.arrange(p_DS_Loc_CA, p_DS_Loc_MA, ncol=2)
 Look at the two plots above, we will tell that there is not a big difference between locations.
 
 
-# Question 5: Who is providing Data Job
+# Question 5: Who is Providing Data Job
 
 For Statisticians, Natera provided most opportunities, and most of the following companies are health industry companies, like Bristol Myers Squibb, Takeda Pharmaceuticals.
 
@@ -529,9 +527,9 @@ count_DS_Comp
 
 # Look at the Jobs in Map
 
-## Statistician
+- Statistician
 
-```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width = 8.5}
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width = 10}
 Link <- paste0('<a href = ',listings_ST$link,'> Details from Indeed </a>')
 i_popup <- paste0("<strong>Titel: </strong>", listings_ST$title, "<br>", 
                   "<strong>Company: </strong>", listings_ST$company, "<br>", 
@@ -550,9 +548,9 @@ Mapping_ST
 
 ----
 
-## Data Scientist
+- Data Scientist
 
-```{R echo=FALSE, message=FALSE, warning=FALSE, fig.width = 8.5}
+```{R echo=FALSE, message=FALSE, warning=FALSE, fig.width = 10}
 Link <- paste0('<a href = ',listings_DS$link,'> Details from Indeed </a>')
 i_popup <- paste0("<strong>Titel: </strong>", listings_DS$title, "<br>", 
                   "<strong>Company: </strong>", listings_DS$company, "<br>", 
@@ -587,3 +585,5 @@ Another finding is that, since the most frequently mentioned required experience
 1. Data set: <a href="https://www.indeed.com/">Indeed</a> 
 2. Longitude and Latitude: <a href="https://cloud.google.com/maps-platform/">Google Map</a>
 3. Text Mining: <a href="https://www.tidytextmining.com/">Text Mining with R</a>
+4. Leaflet: <a href="https://gist.github.com/perliedman/9d42f6d1d6583e882df7ae9e95252c0d/">Leaflet CSS</a>
+5. Menu: <a href="https://github.com/denehyg/reveal.js-menu">Reveal.js-Menu</a>
